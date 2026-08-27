@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<routes>
+
+    <vType
+        id="pedType"
+        vClass="pedestrian"
+        guiShape="pedestrian"
+        maxSpeed="1.5"/>
+
+    <!-- 西から東へ -->
+    <personFlow
+        id="ped_west_to_east"
+        type="pedType"
+        begin="0"
+        end="600"
+        period="20"
+        departPos="random">
+
+        <walk from="left1A1" to="C1right1"/>
+    </personFlow>
+
+
+    <!-- 東から西へ -->
+    <personFlow
+        id="ped_east_to_west"
+        type="pedType"
+        begin="5"
+        end="600"
+        period="20"
+        departPos="random">
+
+        <walk from="right1C1" to="A1left1"/>
+    </personFlow>
+
+    <!-- 南から北へ -->
+    <personFlow
+        id="ped_south_to_north"
+        type="pedType"
+        begin="10"
+        end="600"
+        period="20"
+        departPos="random">
+
+        <walk from="bottom1B0" to="B2top1"/>
+    </personFlow>
+
+    <!-- 北から南へ -->
+    <personFlow
+        id="ped_north_to_south"
+        type="pedType"
+        begin="15"
+        end="600"
+        period="20"
+        departPos="random">
+
+        <walk from="top1B2" to="B0bottom1"/>
+    </personFlow>
+
+</routes>

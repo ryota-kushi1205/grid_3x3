@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<configuration>
+    <input>
+        ## ネットワーク
+        <net-file value="grid_3x3_ped.net.xml"/>
+        ## 車ルート,歩行者ルート
+        <route-files value="grid_3x3.rou.xml,grid_3x3_ped_random.rou.xml"/>
+        ## 追加ファイル
+        <additional-files value="grid_3x3_e2.add.xml"/>
+    </input>
+
+    <time>
+        <begin value="0"/>
+        <end value="600"/>
+    </time>
+</configuration>

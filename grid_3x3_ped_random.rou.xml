@@ -1,0 +1,412 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 2026-08-20 09:53:52.766286 by Eclipse SUMO randomTrips.py v1_27_1+0000-7717f2379d9
+<configuration>
+    <net-file value=".\grid_3x3_ped.net.xml"/>
+    <output-trip-file value=".\grid_3x3_ped_random.trips.xml"/>
+    <route-file value=".\grid_3x3_ped_random.rou.xml"/>
+    <persons value="True"/>
+    <prefix value="ped"/>
+    <vehicle-class value="pedestrian"/>
+    <fringe-factor value="max"/>
+    <min-distance value="400.0"/>
+    <max-distance value="1000.0"/>
+    <end value="600.0"/>
+    <period value="5.0"/>
+</configuration>
+-->
+
+<!-- generated on 2026-08-20T09:53:52.681998+09:00 by Eclipse SUMO duarouter 1.27.1
+<duarouterConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/duarouterConfiguration.xsd">
+
+    <input>
+        <net-file value=".\grid_3x3_ped.net.xml"/>
+        <route-files value=".\grid_3x3_ped_random.trips.xml"/>
+    </input>
+
+    <output>
+        <output-file value=".\grid_3x3_ped_random.rou.xml"/>
+        <alternatives-output value="NUL"/>
+    </output>
+
+    <processing>
+        <routing-threads value="6"/>
+    </processing>
+
+    <time>
+        <begin value="0.0"/>
+        <end value="600.0"/>
+    </time>
+
+    <report>
+        <no-warnings value="true"/>
+        <ignore-errors value="true"/>
+        <no-step-log value="true"/>
+    </report>
+
+</duarouterConfiguration>
+-->
+
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="ped_pedestrian" vClass="pedestrian"/>
+    <person id="ped0" type="ped_pedestrian" depart="0.00">
+        <walk edges="right1C1 C1C0 C0B0 B0A0 A0bottom0"/>
+    </person>
+    <person id="ped1" type="ped_pedestrian" depart="5.00">
+        <walk edges="right2C2 C2C1 C1C0 C0right0"/>
+    </person>
+    <person id="ped2" type="ped_pedestrian" depart="10.00">
+        <walk edges="top1B2 B2B1 B1B0 B0A0 A0left0"/>
+    </person>
+    <person id="ped3" type="ped_pedestrian" depart="15.00">
+        <walk edges="left2A2 A1A2 A0A1 A0bottom0"/>
+    </person>
+    <person id="ped4" type="ped_pedestrian" depart="20.00">
+        <walk edges="bottom2C0 C0C1 C1C2 B2C2 B2top1"/>
+    </person>
+    <person id="ped5" type="ped_pedestrian" depart="25.00">
+        <walk edges="bottom0A0 A0A1 A1left1"/>
+    </person>
+    <person id="ped6" type="ped_pedestrian" depart="30.00">
+        <walk edges="right1C1 C2C1 B2C2 B2top1"/>
+    </person>
+    <person id="ped7" type="ped_pedestrian" depart="35.00">
+        <walk edges="top0A2 A2A1 A1A0 A0bottom0"/>
+    </person>
+    <person id="ped8" type="ped_pedestrian" depart="40.00">
+        <walk edges="top0A2 A2A1 B1A1 C1B1 C1C0 C0right0"/>
+    </person>
+    <person id="ped9" type="ped_pedestrian" depart="45.00">
+        <walk edges="top2C2 B2C2 A2B2 A2top0"/>
+    </person>
+    <person id="ped10" type="ped_pedestrian" depart="50.00">
+        <walk edges="top1B2 B2B1 B1B0 C0B0 C0bottom2"/>
+    </person>
+    <person id="ped11" type="ped_pedestrian" depart="55.00">
+        <walk edges="top0A2 A2A1 B1A1 C1B1 C1C0 C0right0"/>
+    </person>
+    <person id="ped12" type="ped_pedestrian" depart="60.00">
+        <walk edges="right0C0 C1C0 C2C1 C2top2"/>
+    </person>
+    <person id="ped13" type="ped_pedestrian" depart="65.00">
+        <walk edges="left1A1 A2A1 A2B2 B2top1"/>
+    </person>
+    <person id="ped14" type="ped_pedestrian" depart="70.00">
+        <walk edges="top0A2 A2A1 A1A0 B0A0 C0B0 C0bottom2"/>
+    </person>
+    <person id="ped15" type="ped_pedestrian" depart="75.00">
+        <walk edges="right2C2 C2C1 C1C0 C0B0 B0A0 A0bottom0"/>
+    </person>
+    <person id="ped16" type="ped_pedestrian" depart="80.00">
+        <walk edges="bottom2C0 C0C1 B1C1 A1B1 A1A2 A2left2"/>
+    </person>
+    <person id="ped17" type="ped_pedestrian" depart="85.00">
+        <walk edges="bottom0A0 A0A1 A1left1"/>
+    </person>
+    <person id="ped18" type="ped_pedestrian" depart="90.00">
+        <walk edges="bottom1B0 B0B1 A1B1 A1A2 A2left2"/>
+    </person>
+    <person id="ped19" type="ped_pedestrian" depart="95.00">
+        <walk edges="right1C1 C2C1 B2C2 A2B2 A2top0"/>
+    </person>
+    <person id="ped20" type="ped_pedestrian" depart="100.00">
+        <walk edges="left0A0 A0B0 B1B0 B2B1 B2C2 C2top2"/>
+    </person>
+    <person id="ped21" type="ped_pedestrian" depart="105.00">
+        <walk edges="bottom1B0 B0B1 B1B2 A2B2 A2top0"/>
+    </person>
+    <person id="ped22" type="ped_pedestrian" depart="110.00">
+        <walk edges="top2C2 C2C1 C1C0 C0bottom2"/>
+    </person>
+    <person id="ped23" type="ped_pedestrian" depart="115.00">
+        <walk edges="top1B2 C2B2 C2C1 C1right1"/>
+    </person>
+    <person id="ped24" type="ped_pedestrian" depart="120.00">
+        <walk edges="bottom2C0 C0B0 B0A0 A0bottom0"/>
+    </person>
+    <person id="ped25" type="ped_pedestrian" depart="125.00">
+        <walk edges="left0A0 A0A1 A1A2 A2left2"/>
+    </person>
+    <person id="ped26" type="ped_pedestrian" depart="130.00">
+        <walk edges="bottom2C0 C0C1 C1C2 C2top2"/>
+    </person>
+    <person id="ped27" type="ped_pedestrian" depart="135.00">
+        <walk edges="right1C1 C2C1 B2C2 A2B2 A2top0"/>
+    </person>
+    <person id="ped28" type="ped_pedestrian" depart="140.00">
+        <walk edges="top1B2 B2B1 B1B0 B0bottom1"/>
+    </person>
+    <person id="ped29" type="ped_pedestrian" depart="145.00">
+        <walk edges="right0C0 C1C0 B1C1 A1B1 A1A2 A2left2"/>
+    </person>
+    <person id="ped30" type="ped_pedestrian" depart="150.00">
+        <walk edges="top0A2 A2A1 A1A0 B0A0 B0bottom1"/>
+    </person>
+    <person id="ped31" type="ped_pedestrian" depart="155.00">
+        <walk edges="bottom0A0 A0A1 A1A2 A2top0"/>
+    </person>
+    <person id="ped32" type="ped_pedestrian" depart="160.00">
+        <walk edges="bottom0A0 B0A0 C0B0 C0right0"/>
+    </person>
+    <person id="ped33" type="ped_pedestrian" depart="165.00">
+        <walk edges="right2C2 B2C2 B2top1"/>
+    </person>
+    <person id="ped34" type="ped_pedestrian" depart="170.00">
+        <walk edges="left0A0 B0A0 C0B0 C0bottom2"/>
+    </person>
+    <person id="ped35" type="ped_pedestrian" depart="175.00">
+        <walk edges="left2A2 A2B2 B2C2 C2top2"/>
+    </person>
+    <person id="ped36" type="ped_pedestrian" depart="180.00">
+        <walk edges="right0C0 B0C0 A0B0 A0A1 A1left1"/>
+    </person>
+    <person id="ped37" type="ped_pedestrian" depart="185.00">
+        <walk edges="left0A0 B0A0 C0B0 C0bottom2"/>
+    </person>
+    <person id="ped38" type="ped_pedestrian" depart="190.00">
+        <walk edges="right1C1 C1C0 C0B0 B0A0 A0left0"/>
+    </person>
+    <person id="ped39" type="ped_pedestrian" depart="195.00">
+        <walk edges="bottom0A0 A0A1 A1A2 A2left2"/>
+    </person>
+    <person id="ped40" type="ped_pedestrian" depart="200.00">
+        <walk edges="bottom0A0 B0A0 B1B0 B2B1 B2C2 C2top2"/>
+    </person>
+    <person id="ped41" type="ped_pedestrian" depart="205.00">
+        <walk edges="top1B2 C2B2 C2C1 C1right1"/>
+    </person>
+    <person id="ped42" type="ped_pedestrian" depart="210.00">
+        <walk edges="bottom0A0 B0A0 C0B0 C1C0 C1right1"/>
+    </person>
+    <person id="ped43" type="ped_pedestrian" depart="215.00">
+        <walk edges="top0A2 A2A1 A1A0 A0left0"/>
+    </person>
+    <person id="ped44" type="ped_pedestrian" depart="220.00">
+        <walk edges="left2A2 A2B2 B2top1"/>
+    </person>
+    <person id="ped45" type="ped_pedestrian" depart="225.00">
+        <walk edges="left0A0 A0B0 B0C0 C1C0 C2C1 C2right2"/>
+    </person>
+    <person id="ped46" type="ped_pedestrian" depart="230.00">
+        <walk edges="bottom2C0 C0C1 B1C1 A1B1 A1A2 A2left2"/>
+    </person>
+    <person id="ped47" type="ped_pedestrian" depart="235.00">
+        <walk edges="top2C2 C2C1 C1C0 C0bottom2"/>
+    </person>
+    <person id="ped48" type="ped_pedestrian" depart="240.00">
+        <walk edges="left2A2 A2B2 B2top1"/>
+    </person>
+    <person id="ped49" type="ped_pedestrian" depart="245.00">
+        <walk edges="bottom1B0 A0B0 A0A1 A1left1"/>
+    </person>
+    <person id="ped50" type="ped_pedestrian" depart="250.00">
+        <walk edges="left1A1 A0A1 B0A0 C0B0 C0bottom2"/>
+    </person>
+    <person id="ped51" type="ped_pedestrian" depart="255.00">
+        <walk edges="bottom2C0 B0C0 A0B0 A0A1 A1left1"/>
+    </person>
+    <person id="ped52" type="ped_pedestrian" depart="260.00">
+        <walk edges="bottom0A0 B0A0 C0B0 C0bottom2"/>
+    </person>
+    <person id="ped53" type="ped_pedestrian" depart="265.00">
+        <walk edges="bottom2C0 C1C0 C2C1 C2right2"/>
+    </person>
+    <person id="ped54" type="ped_pedestrian" depart="270.00">
+        <walk edges="top1B2 B2B1 B1B0 B0A0 A0bottom0"/>
+    </person>
+    <person id="ped55" type="ped_pedestrian" depart="275.00">
+        <walk edges="bottom2C0 C0B0 B0A0 A0left0"/>
+    </person>
+    <person id="ped56" type="ped_pedestrian" depart="280.00">
+        <walk edges="left2A2 B2A2 C2B2 C2C1 C1right1"/>
+    </person>
+    <person id="ped57" type="ped_pedestrian" depart="285.00">
+        <walk edges="top0A2 A2A1 A1left1"/>
+    </person>
+    <person id="ped58" type="ped_pedestrian" depart="290.00">
+        <walk edges="left2A2 A1A2 A0A1 B0A0 B0bottom1"/>
+    </person>
+    <person id="ped59" type="ped_pedestrian" depart="295.00">
+        <walk edges="right2C2 C2C1 C1C0 C0right0"/>
+    </person>
+    <person id="ped60" type="ped_pedestrian" depart="300.00">
+        <walk edges="top2C2 C2C1 C1C0 C0B0 B0A0 A0left0"/>
+    </person>
+    <person id="ped61" type="ped_pedestrian" depart="305.00">
+        <walk edges="top1B2 B2B1 B1A1 A1left1"/>
+    </person>
+    <person id="ped62" type="ped_pedestrian" depart="310.00">
+        <walk edges="bottom2C0 C0C1 C1C2 C2top2"/>
+    </person>
+    <person id="ped63" type="ped_pedestrian" depart="315.00">
+        <walk edges="left2A2 A2B2 B2C2 C2right2"/>
+    </person>
+    <person id="ped64" type="ped_pedestrian" depart="320.00">
+        <walk edges="right0C0 C0B0 B0A0 A0bottom0"/>
+    </person>
+    <person id="ped65" type="ped_pedestrian" depart="325.00">
+        <walk edges="top1B2 B2B1 B1B0 B0A0 A0left0"/>
+    </person>
+    <person id="ped66" type="ped_pedestrian" depart="330.00">
+        <walk edges="left1A1 A1B1 B2B1 B2C2 C2top2"/>
+    </person>
+    <person id="ped67" type="ped_pedestrian" depart="335.00">
+        <walk edges="left0A0 A0B0 B0C0 C1C0 C1right1"/>
+    </person>
+    <person id="ped68" type="ped_pedestrian" depart="340.00">
+        <walk edges="left2A2 A1A2 A0A1 B0A0 B0bottom1"/>
+    </person>
+    <person id="ped69" type="ped_pedestrian" depart="345.00">
+        <walk edges="bottom1B0 B0B1 A1B1 A1A2 A2left2"/>
+    </person>
+    <person id="ped70" type="ped_pedestrian" depart="350.00">
+        <walk edges="bottom0A0 B0A0 C0B0 C0bottom2"/>
+    </person>
+    <person id="ped71" type="ped_pedestrian" depart="355.00">
+        <walk edges="right0C0 C1C0 C2C1 C2right2"/>
+    </person>
+    <person id="ped72" type="ped_pedestrian" depart="360.00">
+        <walk edges="bottom1B0 B1B0 B2B1 B2C2 C2top2"/>
+    </person>
+    <person id="ped73" type="ped_pedestrian" depart="365.00">
+        <walk edges="bottom0A0 A0A1 A1left1"/>
+    </person>
+    <person id="ped74" type="ped_pedestrian" depart="370.00">
+        <walk edges="bottom2C0 C0B0 B0A0 A0left0"/>
+    </person>
+    <person id="ped75" type="ped_pedestrian" depart="375.00">
+        <walk edges="top1B2 B2B1 B1A1 A1left1"/>
+    </person>
+    <person id="ped76" type="ped_pedestrian" depart="380.00">
+        <walk edges="left2A2 A1A2 A0A1 B0A0 C0B0 C0bottom2"/>
+    </person>
+    <person id="ped77" type="ped_pedestrian" depart="385.00">
+        <walk edges="right0C0 C1C0 C2C1 C2top2"/>
+    </person>
+    <person id="ped78" type="ped_pedestrian" depart="390.00">
+        <walk edges="bottom2C0 C0C1 C1C2 B2C2 A2B2 A2top0"/>
+    </person>
+    <person id="ped79" type="ped_pedestrian" depart="395.00">
+        <walk edges="right2C2 C2B2 B2A2 A2left2"/>
+    </person>
+    <person id="ped80" type="ped_pedestrian" depart="400.00">
+        <walk edges="left0A0 A0B0 B0C0 C1C0 C1right1"/>
+    </person>
+    <person id="ped81" type="ped_pedestrian" depart="405.00">
+        <walk edges="bottom0A0 A0A1 A1left1"/>
+    </person>
+    <person id="ped82" type="ped_pedestrian" depart="410.00">
+        <walk edges="left0A0 A0B0 B1B0 B2B1 B2C2 C2top2"/>
+    </person>
+    <person id="ped83" type="ped_pedestrian" depart="415.00">
+        <walk edges="top1B2 B2B1 C1B1 C1C0 C0right0"/>
+    </person>
+    <person id="ped84" type="ped_pedestrian" depart="420.00">
+        <walk edges="right1C1 C1C0 C0B0 B0A0 A0bottom0"/>
+    </person>
+    <person id="ped85" type="ped_pedestrian" depart="425.00">
+        <walk edges="bottom1B0 B0B1 B1B2 B2top1"/>
+    </person>
+    <person id="ped86" type="ped_pedestrian" depart="430.00">
+        <walk edges="left0A0 B0A0 C0B0 C0bottom2"/>
+    </person>
+    <person id="ped87" type="ped_pedestrian" depart="435.00">
+        <walk edges="right2C2 C2C1 C1B1 B1A1 A1left1"/>
+    </person>
+    <person id="ped88" type="ped_pedestrian" depart="440.00">
+        <walk edges="right1C1 B1C1 A1B1 A1A2 A2left2"/>
+    </person>
+    <person id="ped89" type="ped_pedestrian" depart="445.00">
+        <walk edges="left2A2 A2B2 B2C2 C2right2"/>
+    </person>
+    <person id="ped90" type="ped_pedestrian" depart="450.00">
+        <walk edges="top1B2 B2B1 B1B0 B0A0 A0left0"/>
+    </person>
+    <person id="ped91" type="ped_pedestrian" depart="455.00">
+        <walk edges="bottom0A0 B0A0 C0B0 C1C0 C1right1"/>
+    </person>
+    <person id="ped92" type="ped_pedestrian" depart="460.00">
+        <walk edges="right1C1 B1C1 A1B1 A1A2 A2left2"/>
+    </person>
+    <person id="ped93" type="ped_pedestrian" depart="465.00">
+        <walk edges="right2C2 B2C2 B2top1"/>
+    </person>
+    <person id="ped94" type="ped_pedestrian" depart="470.00">
+        <walk edges="left2A2 A1A2 A0A1 A0bottom0"/>
+    </person>
+    <person id="ped95" type="ped_pedestrian" depart="475.00">
+        <walk edges="bottom0A0 B0A0 C0B0 C1C0 C2C1 C2right2"/>
+    </person>
+    <person id="ped96" type="ped_pedestrian" depart="480.00">
+        <walk edges="left0A0 A0B0 B0C0 C1C0 C2C1 C2right2"/>
+    </person>
+    <person id="ped97" type="ped_pedestrian" depart="485.00">
+        <walk edges="top0A2 A2B2 B2C2 C2right2"/>
+    </person>
+    <person id="ped98" type="ped_pedestrian" depart="490.00">
+        <walk edges="top1B2 B2B1 B1A1 A1left1"/>
+    </person>
+    <person id="ped99" type="ped_pedestrian" depart="495.00">
+        <walk edges="bottom2C0 C0B0 B0A0 A0left0"/>
+    </person>
+    <person id="ped100" type="ped_pedestrian" depart="500.00">
+        <walk edges="top0A2 A2B2 B2C2 C2right2"/>
+    </person>
+    <person id="ped101" type="ped_pedestrian" depart="505.00">
+        <walk edges="left1A1 A0A1 B0A0 C0B0 C0bottom2"/>
+    </person>
+    <person id="ped102" type="ped_pedestrian" depart="510.00">
+        <walk edges="bottom1B0 B1B0 B2B1 B2C2 C2top2"/>
+    </person>
+    <person id="ped103" type="ped_pedestrian" depart="515.00">
+        <walk edges="top0A2 A2B2 B2C2 C2right2"/>
+    </person>
+    <person id="ped104" type="ped_pedestrian" depart="520.00">
+        <walk edges="bottom0A0 B0A0 C0B0 C0right0"/>
+    </person>
+    <person id="ped105" type="ped_pedestrian" depart="525.00">
+        <walk edges="left0A0 A0B0 B1B0 B2B1 B2C2 C2top2"/>
+    </person>
+    <person id="ped106" type="ped_pedestrian" depart="530.00">
+        <walk edges="top0A2 A2B2 B2C2 C2right2"/>
+    </person>
+    <person id="ped107" type="ped_pedestrian" depart="535.00">
+        <walk edges="top0A2 A2A1 A1A0 A0left0"/>
+    </person>
+    <person id="ped108" type="ped_pedestrian" depart="540.00">
+        <walk edges="bottom2C0 C1C0 C1right1"/>
+    </person>
+    <person id="ped109" type="ped_pedestrian" depart="545.00">
+        <walk edges="top0A2 A2A1 A1left1"/>
+    </person>
+    <person id="ped110" type="ped_pedestrian" depart="550.00">
+        <walk edges="bottom0A0 A0A1 A1left1"/>
+    </person>
+    <person id="ped111" type="ped_pedestrian" depart="555.00">
+        <walk edges="left0A0 A0B0 B0C0 C1C0 C2C1 C2right2"/>
+    </person>
+    <person id="ped112" type="ped_pedestrian" depart="560.00">
+        <walk edges="top2C2 C2B2 B2A2 A2left2"/>
+    </person>
+    <person id="ped113" type="ped_pedestrian" depart="565.00">
+        <walk edges="right1C1 C2C1 B2C2 A2B2 A2top0"/>
+    </person>
+    <person id="ped114" type="ped_pedestrian" depart="570.00">
+        <walk edges="top2C2 C2C1 C1C0 C0B0 B0A0 A0left0"/>
+    </person>
+    <person id="ped115" type="ped_pedestrian" depart="575.00">
+        <walk edges="top2C2 C2C1 C1B1 B1A1 A1left1"/>
+    </person>
+    <person id="ped116" type="ped_pedestrian" depart="580.00">
+        <walk edges="top2C2 C2B2 B2A2 A2left2"/>
+    </person>
+    <person id="ped117" type="ped_pedestrian" depart="585.00">
+        <walk edges="right2C2 C2B2 B2A2 A2left2"/>
+    </person>
+    <person id="ped118" type="ped_pedestrian" depart="590.00">
+        <walk edges="right1C1 C2C1 B2C2 B2top1"/>
+    </person>
+    <person id="ped119" type="ped_pedestrian" depart="595.00">
+        <walk edges="left1A1 A2A1 A2B2 B2top1"/>
+    </person>
+</routes>
