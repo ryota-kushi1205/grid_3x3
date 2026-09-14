@@ -12,6 +12,6 @@
 
     <time>
         <begin value="0"/>
-        <end value="600"/>
+        <end value="3600"/>
     </time>
 </configuration>
