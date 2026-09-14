@@ -14,4 +14,9 @@
         <begin value="0"/>
         <end value="3600"/>
     </time>
+
+    <random_number>
+        <!-- 実験間で車両・歩行者の挙動を再現可能にする -->
+        <seed value="42"/>
+    </random_number>
 </configuration>
