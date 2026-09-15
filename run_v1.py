@@ -2,7 +2,6 @@ import argparse
 import csv
 import os
 import sys
-import xml.etree.ElementTree as ET
 
 
 # ============================================================
@@ -22,7 +21,6 @@ import traci
 # ============================================================
 
 SUMO_CFG = "grid_3x3.sumocfg"
-NET_FILE = "grid_3x3_ped.net.xml"
 CSV_FILE = "congestion_v1.csv"
 
 SIMULATION_END = 3600.0
@@ -39,6 +37,27 @@ WALKING_AREAS = ["w0", "w1", "w2", "w3"]
 CROSSINGS = ["c0", "c1", "c2", "c3"]
 DETECTOR_DIRECTIONS = ["east", "north", "south", "west"]
 
+# c0/c2は東西方向へ渡る歩行者、c1/c3は南北方向へ渡る歩行者。
+# 同じグループの2横断歩道は同じ現示で同時に青になる。
+PEDESTRIAN_GROUPS = {
+    "east_west": ("c0", "c2"),
+    "north_south": ("c1", "c3"),
+}
+
+# 歩行者を流すため現示を切り替えた場合、新しく停止する車両方向。
+AFFECTED_VEHICLE_DIRECTIONS = {
+    "east_west": ("north", "south"),
+    "north_south": ("east", "west"),
+}
+
+# 各流入方向の直進信号linkIndex。赤信号で待つ車両の判定に使う。
+VEHICLE_THROUGH_LINK_INDEX = {
+    "south": 1,
+    "east": 5,
+    "north": 9,
+    "west": 13,
+}
+
 # 現在のネットワークでは全9交差点でc0～c3が16～19に対応する。
 PED_LINK_INDEX = {
     "c0": 16,
@@ -54,15 +73,31 @@ WALKING_AREA_CROSSINGS = {
     "w3": ["c2", "c3"],
 }
 
+# SUMOも0.1 m/s以下を停止判定の既定値として使う。
 STOP_SPEED = 0.1  # m/s
-IDLE_POWER = 9_500.0  # J/(台・s)
-RESTART_ENERGY = 500_000.0  # J/台
-T_MARGIN = 12.0  # s
-T_PER_PED = 0.8  # s/人
 
-# SUMOのgetFuelConsumption()はmg/sを返す。
-# ガソリンの低位発熱量を暫定44 MJ/kgとして燃料エネルギーへ換算する。
-FUEL_ENERGY_PER_MG = 44.0  # J/mg
+# 乗用車のアイドル燃料を約0.3 gal/h、ガソリン低位発熱量を
+# 約114,000 BTU/galとした代表値（約10 kW）。全車両で固定する。
+IDLE_POWER = 10_000.0  # J/(台・s) = W/台
+
+# 1500 kgの乗用車を道路上限13.89 m/sまで再加速する燃料エネルギーの
+# 代表値。1/2*m*v^2を変換効率約30%で割った約0.48 MJを丸めた値。
+# 実際の発進には加算せず、歩行者現示で新しく止める車両の予測だけに使う。
+RESTART_ENERGY = 500_000.0  # J/台
+
+# MUTCDの最小WALK時間、FHWAの歩行者列のWALK時間式、
+# 本ネットワークの横断歩道寸法を使う。
+# 基本時間 = 最小WALK 7.0 s + 6.4 m / 1.07 m/s = 約13.0 s
+# 列放出時間 = 3.2 s + (0.57 / 幅4.0 m) * 人数
+PEDESTRIAN_MIN_WALK_TIME = 7.0  # s
+PEDESTRIAN_QUEUE_STARTUP_TIME = 3.2  # s
+CROSSING_LENGTH = 6.4  # m
+PEDESTRIAN_WALK_SPEED = 1.07  # m/s
+CROSSWALK_WIDTH = 4.0  # m
+T_MARGIN = PEDESTRIAN_MIN_WALK_TIME + (
+    CROSSING_LENGTH / PEDESTRIAN_WALK_SPEED
+)
+T_PER_PED = 0.57 / CROSSWALK_WIDTH  # s/人
 
 
 # ============================================================
@@ -119,131 +154,59 @@ def infer_waiting_crossings(w_counts, signals):
 
 
 # ============================================================
-# 車両進路と横断歩道の競合関係
+# 方向別の車両検知
 # ============================================================
 
-def load_crossing_conflict_links(net_file):
-    """
-    .net.xmlのjunction/request/foesから、各横断歩道と競合する
-    車両信号linkIndexを読み取る。
-
-    SUMOのfoesビット列は右端がlinkIndex=0に対応する。
-    """
-    root = ET.parse(net_file).getroot()
-    conflict_links = {}
-
-    for junction in INTERSECTIONS:
-        junction_node = root.find(f"./junction[@id='{junction}']")
-        if junction_node is None:
-            raise RuntimeError(f"{junction}: junction定義がありません")
-
-        requests = {
-            int(node.attrib["index"]): node
-            for node in junction_node.findall("request")
-        }
-        conflict_links[junction] = {}
-
-        for crossing, crossing_index in PED_LINK_INDEX.items():
-            if crossing_index not in requests:
-                raise RuntimeError(
-                    f"{junction}/{crossing}: request定義がありません"
-                )
-
-            foes = requests[crossing_index].attrib["foes"]
-            conflict_links[junction][crossing] = {
-                link_index
-                for link_index in range(crossing_index)
-                if link_index < len(foes)
-                and foes[-1 - link_index] == "1"
-            }
-
-    return conflict_links
-
-
-def build_movement_link_maps():
-    """
-    (流入エッジ, 流出エッジ)から車両信号linkIndexを引く表を作る。
-    現在の1車線ネットワークを前提とする。
-    """
-    movement_maps = {}
-
-    for junction in INTERSECTIONS:
-        movement_map = {}
-        controlled_links = traci.trafficlight.getControlledLinks(junction)
-
-        for link_index, link_group in enumerate(controlled_links):
-            if link_index >= min(PED_LINK_INDEX.values()):
-                continue
-
-            for incoming_lane, outgoing_lane, _via_lane in link_group:
-                incoming_edge = traci.lane.getEdgeID(incoming_lane)
-                outgoing_edge = traci.lane.getEdgeID(outgoing_lane)
-                key = (incoming_edge, outgoing_edge)
-
-                if key in movement_map and movement_map[key] != link_index:
-                    raise RuntimeError(
-                        f"{junction}: 車両進路{key}のlinkIndexが一意ではありません"
-                    )
-
-                movement_map[key] = link_index
-
-        movement_maps[junction] = movement_map
-
-    return movement_maps
-
-
-def get_detector_vehicle_ids(junction):
-    vehicle_ids = set()
-
-    for direction in DETECTOR_DIRECTIONS:
-        detector_id = f"e2_{junction}_{direction}"
-        vehicle_ids.update(
-            traci.lanearea.getLastStepVehicleIDs(detector_id)
+def get_detector_vehicle_ids_by_direction(junction):
+    return {
+        direction: set(
+            traci.lanearea.getLastStepVehicleIDs(
+                f"e2_{junction}_{direction}"
+            )
         )
-
-    return vehicle_ids
-
-
-def get_vehicle_movement_link(vehicle_id, movement_map):
-    route = traci.vehicle.getRoute(vehicle_id)
-    route_index = traci.vehicle.getRouteIndex(vehicle_id)
-
-    if route_index < 0 or route_index + 1 >= len(route):
-        return None
-
-    current_edge = traci.vehicle.getRoadID(vehicle_id)
-    next_edge = route[route_index + 1]
-    return movement_map.get((current_edge, next_edge))
-
-
-def get_affected_vehicles(
-    junction,
-    crossing_counts,
-    vehicle_ids,
-    movement_map,
-    conflict_links,
-):
-    """
-    待機歩行者がいる横断歩道ごとに、E2内の車両のうち
-    その横断歩道と進路が競合する車両IDを抽出する。
-    """
-    affected = {crossing: set() for crossing in CROSSINGS}
-
-    movement_by_vehicle = {
-        vehicle_id: get_vehicle_movement_link(vehicle_id, movement_map)
-        for vehicle_id in vehicle_ids
+        for direction in DETECTOR_DIRECTIONS
     }
 
-    for crossing in CROSSINGS:
-        if crossing_counts[crossing] == 0:
+
+def get_stopped_red_vehicles(junction, vehicles_by_direction):
+    """赤信号の流入方向で、現在0.1 m/s未満の車両を返す。"""
+    signal_state = traci.trafficlight.getRedYellowGreenState(junction)
+    stopped = set()
+
+    for direction, vehicle_ids in vehicles_by_direction.items():
+        link_index = VEHICLE_THROUGH_LINK_INDEX[direction]
+        if signal_state[link_index].lower() != "r":
             continue
 
-        foes = conflict_links[junction][crossing]
-        affected[crossing] = {
+        stopped.update(
             vehicle_id
-            for vehicle_id, link_index in movement_by_vehicle.items()
-            if link_index is not None and link_index in foes
-        }
+            for vehicle_id in vehicle_ids
+            if traci.vehicle.getSpeed(vehicle_id) < STOP_SPEED
+        )
+
+    return stopped
+
+
+def get_affected_vehicles_by_pedestrian_group(
+    crossing_counts,
+    vehicles_by_direction,
+):
+    """
+    待機歩行者を流すために現示を切り替えた場合、新しく止める車両を
+    方向別E2検知器から近似する。右左折・直進の経路判定は行わない。
+    """
+    affected = {group: set() for group in PEDESTRIAN_GROUPS}
+
+    for group, crossings in PEDESTRIAN_GROUPS.items():
+        if not any(crossing_counts[crossing] > 0 for crossing in crossings):
+            continue
+
+        for direction in AFFECTED_VEHICLE_DIRECTIONS[group]:
+            affected[group].update(
+                vehicle_id
+                for vehicle_id in vehicles_by_direction[direction]
+                if traci.vehicle.getSpeed(vehicle_id) >= STOP_SPEED
+            )
 
     return affected
 
@@ -252,66 +215,46 @@ def get_affected_vehicles(
 # エネルギー混雑度
 # ============================================================
 
-def new_vehicle_accumulator():
-    return {
-        "moving_energy_j": 0.0,
-        "idle_energy_j": 0.0,
-        "moving_vehicle_seconds": 0.0,
-        "stopped_vehicle_seconds": 0.0,
-    }
-
-
-def accumulate_vehicle_energy(accumulator, vehicle_ids):
-    """現在の1秒分の移動・停止車両エネルギーを加算する。"""
-    for vehicle_id in vehicle_ids:
-        speed = traci.vehicle.getSpeed(vehicle_id)
-
-        if speed < STOP_SPEED:
-            accumulator["idle_energy_j"] += (
-                IDLE_POWER * SIMULATION_STEP
-            )
-            accumulator["stopped_vehicle_seconds"] += SIMULATION_STEP
-        else:
-            fuel_mg_per_s = max(
-                0.0,
-                traci.vehicle.getFuelConsumption(vehicle_id),
-            )
-            accumulator["moving_energy_j"] += (
-                fuel_mg_per_s
-                * FUEL_ENERGY_PER_MG
-                * SIMULATION_STEP
-            )
-            accumulator["moving_vehicle_seconds"] += SIMULATION_STEP
-
-
-def calculate_pedestrian_energy(crossing_counts, affected):
+def calculate_pedestrian_prediction(crossing_counts, affected):
     """
-    歩行者を流す場合の予測エネルギーを横断歩道別に計算する。
+    歩行者グループを流す場合の予測負荷を計算する。
 
-    現在の1秒は車両側ですでに計上するため、予測アイドル時間から
-    SIMULATION_STEPを引く。再発進エネルギーは1台1回と仮定する。
+    同じ現示で青になる2横断歩道は並行して処理されるため、クリア時間は
+    2本の待機人数の最大値で決め、影響車両を1回だけ数える。
+    再加速エネルギーは予測だけに含め、実際の発進時には計上しない。
     """
     clear_times = {}
-    energy_by_crossing = {}
+    energy_by_group = {}
+    average_power_by_group = {}
 
-    for crossing in CROSSINGS:
-        waiting_count = crossing_counts[crossing]
-
-        if waiting_count == 0:
-            clear_times[crossing] = 0.0
-            energy_by_crossing[crossing] = 0.0
-            continue
-
-        clear_time = T_MARGIN + T_PER_PED * waiting_count
-        future_idle_time = max(0.0, clear_time - SIMULATION_STEP)
-        affected_count = len(affected[crossing])
-
-        clear_times[crossing] = clear_time
-        energy_by_crossing[crossing] = affected_count * (
-            IDLE_POWER * future_idle_time + RESTART_ENERGY
+    for group, crossings in PEDESTRIAN_GROUPS.items():
+        waiting_count = max(
+            crossing_counts[crossing]
+            for crossing in crossings
         )
 
-    return clear_times, energy_by_crossing
+        if waiting_count == 0:
+            clear_times[group] = 0.0
+            energy_by_group[group] = 0.0
+            average_power_by_group[group] = 0.0
+            continue
+
+        crossing_clearance_time = CROSSING_LENGTH / PEDESTRIAN_WALK_SPEED
+        queue_clear_time = (
+            PEDESTRIAN_QUEUE_STARTUP_TIME
+            + T_PER_PED * waiting_count
+            + crossing_clearance_time
+        )
+        clear_time = max(T_MARGIN, queue_clear_time)
+        predicted_energy = len(affected[group]) * (
+            IDLE_POWER * clear_time + RESTART_ENERGY
+        )
+
+        clear_times[group] = clear_time
+        energy_by_group[group] = predicted_energy
+        average_power_by_group[group] = predicted_energy / clear_time
+
+    return clear_times, energy_by_group, average_power_by_group
 
 
 # ============================================================
@@ -321,110 +264,122 @@ def calculate_pedestrian_energy(crossing_counts, affected):
 CSV_FIELDS = [
     "time_s",
     "junction",
-    "moving_vehicle_seconds",
-    "stopped_vehicle_seconds",
-    "moving_energy_mj",
-    "idle_energy_mj",
-    "vehicle_congestion_mj",
+    "stopped_red_vehicles",
+    "idle_power_mw",
     "wait_c0",
     "wait_c1",
     "wait_c2",
     "wait_c3",
+    "wait_east_west",
+    "wait_north_south",
     "unresolved_pedestrians",
-    "affected_c0",
-    "affected_c1",
-    "affected_c2",
-    "affected_c3",
-    "clear_time_c0_s",
-    "clear_time_c1_s",
-    "clear_time_c2_s",
-    "clear_time_c3_s",
-    "pedestrian_congestion_mj",
-    "total_congestion_mj",
+    "affected_vehicles_for_east_west_ped",
+    "affected_vehicles_for_north_south_ped",
+    "clear_time_east_west_s",
+    "clear_time_north_south_s",
+    "predicted_energy_east_west_mj",
+    "predicted_energy_north_south_mj",
+    "predicted_average_power_mw",
+    "total_congestion_mw",
+    "reward",
 ]
 
 
 def make_output_row(
     time_s,
     junction,
-    accumulator,
+    stopped_red_vehicles,
     crossing_counts,
     unresolved,
     affected,
     clear_times,
-    ped_energy,
+    predicted_energy,
+    predicted_average_power,
 ):
-    moving_mj = accumulator["moving_energy_j"] / 1_000_000.0
-    idle_mj = accumulator["idle_energy_j"] / 1_000_000.0
-    vehicle_mj = moving_mj + idle_mj
-    pedestrian_mj = sum(ped_energy.values()) / 1_000_000.0
+    idle_power_mw = len(stopped_red_vehicles) * IDLE_POWER / 1_000_000.0
+    prediction_power_mw = (
+        sum(predicted_average_power.values()) / 1_000_000.0
+    )
+    total_congestion_mw = idle_power_mw + prediction_power_mw
 
     return {
         "time_s": f"{time_s:.0f}",
         "junction": junction,
-        "moving_vehicle_seconds": (
-            f"{accumulator['moving_vehicle_seconds']:.1f}"
-        ),
-        "stopped_vehicle_seconds": (
-            f"{accumulator['stopped_vehicle_seconds']:.1f}"
-        ),
-        "moving_energy_mj": f"{moving_mj:.6f}",
-        "idle_energy_mj": f"{idle_mj:.6f}",
-        "vehicle_congestion_mj": f"{vehicle_mj:.6f}",
+        "stopped_red_vehicles": len(stopped_red_vehicles),
+        "idle_power_mw": f"{idle_power_mw:.6f}",
         "wait_c0": crossing_counts["c0"],
         "wait_c1": crossing_counts["c1"],
         "wait_c2": crossing_counts["c2"],
         "wait_c3": crossing_counts["c3"],
+        "wait_east_west": (
+            crossing_counts["c0"] + crossing_counts["c2"]
+        ),
+        "wait_north_south": (
+            crossing_counts["c1"] + crossing_counts["c3"]
+        ),
         "unresolved_pedestrians": unresolved,
-        "affected_c0": len(affected["c0"]),
-        "affected_c1": len(affected["c1"]),
-        "affected_c2": len(affected["c2"]),
-        "affected_c3": len(affected["c3"]),
-        "clear_time_c0_s": f"{clear_times['c0']:.1f}",
-        "clear_time_c1_s": f"{clear_times['c1']:.1f}",
-        "clear_time_c2_s": f"{clear_times['c2']:.1f}",
-        "clear_time_c3_s": f"{clear_times['c3']:.1f}",
-        "pedestrian_congestion_mj": f"{pedestrian_mj:.6f}",
-        "total_congestion_mj": f"{vehicle_mj + pedestrian_mj:.6f}",
+        "affected_vehicles_for_east_west_ped": len(
+            affected["east_west"]
+        ),
+        "affected_vehicles_for_north_south_ped": len(
+            affected["north_south"]
+        ),
+        "clear_time_east_west_s": f"{clear_times['east_west']:.3f}",
+        "clear_time_north_south_s": f"{clear_times['north_south']:.3f}",
+        "predicted_energy_east_west_mj": (
+            f"{predicted_energy['east_west'] / 1_000_000.0:.6f}"
+        ),
+        "predicted_energy_north_south_mj": (
+            f"{predicted_energy['north_south'] / 1_000_000.0:.6f}"
+        ),
+        "predicted_average_power_mw": f"{prediction_power_mw:.6f}",
+        "total_congestion_mw": f"{total_congestion_mw:.6f}",
+        "reward": f"{-total_congestion_mw:.6f}",
     }
 
 
 def print_interval(time_s, rows):
     print()
-    print("=" * 118)
-    print(f"T = {time_s:.0f} s（直前{DECISION_INTERVAL}秒の車両実消費＋現在の歩行者予測消費）")
+    print("=" * 126)
+    print(
+        f"T = {time_s:.0f} s（現在の赤信号アイドル負荷＋"
+        "歩行者処理の予測平均負荷）"
+    )
 
-    network_vehicle = 0.0
-    network_pedestrian = 0.0
+    network_idle = 0.0
+    network_prediction = 0.0
 
     for row in rows:
-        vehicle_mj = float(row["vehicle_congestion_mj"])
-        pedestrian_mj = float(row["pedestrian_congestion_mj"])
-        total_mj = float(row["total_congestion_mj"])
-        network_vehicle += vehicle_mj
-        network_pedestrian += pedestrian_mj
+        idle_mw = float(row["idle_power_mw"])
+        prediction_mw = float(row["predicted_average_power_mw"])
+        total_mw = float(row["total_congestion_mw"])
+        network_idle += idle_mw
+        network_prediction += prediction_mw
 
         waits = "/".join(str(row[f"wait_c{i}"]) for i in range(4))
         affected = "/".join(
-            str(row[f"affected_c{i}"]) for i in range(4)
+            str(row[field])
+            for field in (
+                "affected_vehicles_for_east_west_ped",
+                "affected_vehicles_for_north_south_ped",
+            )
         )
 
         print(
             f"{row['junction']} | "
-            f"VEH={vehicle_mj:.3f} MJ "
-            f"(MOVE={float(row['moving_energy_mj']):.3f}, "
-            f"IDLE={float(row['idle_energy_mj']):.3f}) | "
-            f"PED={pedestrian_mj:.3f} MJ | "
-            f"TOTAL={total_mj:.3f} MJ | "
+            f"IDLE={idle_mw:.3f} MW "
+            f"(STOPPED_RED={row['stopped_red_vehicles']}) | "
+            f"PED_PRED={prediction_mw:.3f} MW | "
+            f"CONGESTION={total_mw:.3f} MW | "
             f"WAIT(c0/c1/c2/c3)={waits} | "
-            f"AFFECTED={affected} | "
+            f"AFFECTED(EW_PED/NS_PED)={affected} | "
             f"UNRESOLVED={row['unresolved_pedestrians']}"
         )
 
     print(
-        f"NETWORK | VEH={network_vehicle:.3f} MJ | "
-        f"PED={network_pedestrian:.3f} MJ | "
-        f"TOTAL={network_vehicle + network_pedestrian:.3f} MJ"
+        f"NETWORK | IDLE={network_idle:.3f} MW | "
+        f"PED_PRED={network_prediction:.3f} MW | "
+        f"CONGESTION={network_idle + network_prediction:.3f} MW"
     )
 
 
@@ -434,7 +389,7 @@ def print_interval(time_s, rows):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="車両・歩行者のエネルギー換算混雑度v1"
+        description="車両・歩行者の瞬間エネルギー負荷による混雑度v1"
     )
     parser.add_argument(
         "--nogui",
@@ -458,7 +413,6 @@ def parse_args():
 def main():
     args = parse_args()
     sumo_binary = "sumo" if args.nogui else "sumo-gui"
-    conflict_links = load_crossing_conflict_links(NET_FILE)
 
     traci.start([
         sumo_binary,
@@ -470,14 +424,7 @@ def main():
         str(args.end),
     ])
 
-    accumulators = {
-        junction: new_vehicle_accumulator()
-        for junction in INTERSECTIONS
-    }
-
     try:
-        movement_maps = build_movement_link_maps()
-
         with open(args.output, "w", newline="", encoding="utf-8-sig") as csv_file:
             writer = csv.DictWriter(csv_file, fieldnames=CSV_FIELDS)
             writer.writeheader()
@@ -487,15 +434,9 @@ def main():
                 time_s = traci.simulation.getTime()
 
                 vehicles_by_junction = {
-                    junction: get_detector_vehicle_ids(junction)
+                    junction: get_detector_vehicle_ids_by_direction(junction)
                     for junction in INTERSECTIONS
                 }
-
-                for junction in INTERSECTIONS:
-                    accumulate_vehicle_energy(
-                        accumulators[junction],
-                        vehicles_by_junction[junction],
-                    )
 
                 if int(round(time_s)) % DECISION_INTERVAL != 0:
                     continue
@@ -522,36 +463,35 @@ def main():
                             f"{junction}: 歩行者数の集計が一致しません"
                         )
 
-                    affected = get_affected_vehicles(
+                    stopped_red_vehicles = get_stopped_red_vehicles(
                         junction,
+                        vehicles_by_junction[junction],
+                    )
+                    affected = get_affected_vehicles_by_pedestrian_group(
                         crossing_counts,
                         vehicles_by_junction[junction],
-                        movement_maps[junction],
-                        conflict_links,
                     )
-                    clear_times, ped_energy = calculate_pedestrian_energy(
-                        crossing_counts,
-                        affected,
-                    )
+                    (
+                        clear_times,
+                        predicted_energy,
+                        predicted_average_power,
+                    ) = calculate_pedestrian_prediction(crossing_counts, affected)
                     row = make_output_row(
                         time_s,
                         junction,
-                        accumulators[junction],
+                        stopped_red_vehicles,
                         crossing_counts,
                         unresolved,
                         affected,
                         clear_times,
-                        ped_energy,
+                        predicted_energy,
+                        predicted_average_power,
                     )
                     rows.append(row)
                     writer.writerow(row)
 
                 csv_file.flush()
                 print_interval(time_s, rows)
-                accumulators = {
-                    junction: new_vehicle_accumulator()
-                    for junction in INTERSECTIONS
-                }
 
     finally:
         traci.close()
