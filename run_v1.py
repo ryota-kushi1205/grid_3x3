@@ -225,7 +225,6 @@ def calculate_pedestrian_prediction(crossing_counts, affected):
     """
     clear_times = {}
     energy_by_group = {}
-    average_power_by_group = {}
 
     for group, crossings in PEDESTRIAN_GROUPS.items():
         waiting_count = max(
@@ -236,7 +235,6 @@ def calculate_pedestrian_prediction(crossing_counts, affected):
         if waiting_count == 0:
             clear_times[group] = 0.0
             energy_by_group[group] = 0.0
-            average_power_by_group[group] = 0.0
             continue
 
         crossing_clearance_time = CROSSING_LENGTH / PEDESTRIAN_WALK_SPEED
@@ -252,9 +250,8 @@ def calculate_pedestrian_prediction(crossing_counts, affected):
 
         clear_times[group] = clear_time
         energy_by_group[group] = predicted_energy
-        average_power_by_group[group] = predicted_energy / clear_time
 
-    return clear_times, energy_by_group, average_power_by_group
+    return clear_times, energy_by_group
 
 
 # ============================================================
@@ -265,7 +262,7 @@ CSV_FIELDS = [
     "time_s",
     "junction",
     "stopped_red_vehicles",
-    "idle_power_mw",
+    "idle_energy_mj",
     "wait_c0",
     "wait_c1",
     "wait_c2",
@@ -279,8 +276,8 @@ CSV_FIELDS = [
     "clear_time_north_south_s",
     "predicted_energy_east_west_mj",
     "predicted_energy_north_south_mj",
-    "predicted_average_power_mw",
-    "total_congestion_mw",
+    "predicted_pedestrian_energy_mj",
+    "total_congestion_mj",
     "reward",
 ]
 
@@ -294,19 +291,22 @@ def make_output_row(
     affected,
     clear_times,
     predicted_energy,
-    predicted_average_power,
 ):
-    idle_power_mw = len(stopped_red_vehicles) * IDLE_POWER / 1_000_000.0
-    prediction_power_mw = (
-        sum(predicted_average_power.values()) / 1_000_000.0
+    # 積算値ではなく、現在の停止台数に対する1ステップ分のエネルギー。
+    idle_energy_mj = (
+        len(stopped_red_vehicles)
+        * IDLE_POWER
+        * SIMULATION_STEP
+        / 1_000_000.0
     )
-    total_congestion_mw = idle_power_mw + prediction_power_mw
+    prediction_energy_mj = sum(predicted_energy.values()) / 1_000_000.0
+    total_congestion_mj = idle_energy_mj + prediction_energy_mj
 
     return {
         "time_s": f"{time_s:.0f}",
         "junction": junction,
         "stopped_red_vehicles": len(stopped_red_vehicles),
-        "idle_power_mw": f"{idle_power_mw:.6f}",
+        "idle_energy_mj": f"{idle_energy_mj:.6f}",
         "wait_c0": crossing_counts["c0"],
         "wait_c1": crossing_counts["c1"],
         "wait_c2": crossing_counts["c2"],
@@ -332,9 +332,9 @@ def make_output_row(
         "predicted_energy_north_south_mj": (
             f"{predicted_energy['north_south'] / 1_000_000.0:.6f}"
         ),
-        "predicted_average_power_mw": f"{prediction_power_mw:.6f}",
-        "total_congestion_mw": f"{total_congestion_mw:.6f}",
-        "reward": f"{-total_congestion_mw:.6f}",
+        "predicted_pedestrian_energy_mj": f"{prediction_energy_mj:.6f}",
+        "total_congestion_mj": f"{total_congestion_mj:.6f}",
+        "reward": f"{-total_congestion_mj:.6f}",
     }
 
 
@@ -342,19 +342,19 @@ def print_interval(time_s, rows):
     print()
     print("=" * 126)
     print(
-        f"T = {time_s:.0f} s（現在の赤信号アイドル負荷＋"
-        "歩行者処理の予測平均負荷）"
+        f"T = {time_s:.0f} s（現在の赤信号アイドル1秒分＋"
+        "歩行者処理完了までの予測エネルギー）"
     )
 
     network_idle = 0.0
     network_prediction = 0.0
 
     for row in rows:
-        idle_mw = float(row["idle_power_mw"])
-        prediction_mw = float(row["predicted_average_power_mw"])
-        total_mw = float(row["total_congestion_mw"])
-        network_idle += idle_mw
-        network_prediction += prediction_mw
+        idle_mj = float(row["idle_energy_mj"])
+        prediction_mj = float(row["predicted_pedestrian_energy_mj"])
+        total_mj = float(row["total_congestion_mj"])
+        network_idle += idle_mj
+        network_prediction += prediction_mj
 
         waits = "/".join(str(row[f"wait_c{i}"]) for i in range(4))
         affected = "/".join(
@@ -367,19 +367,19 @@ def print_interval(time_s, rows):
 
         print(
             f"{row['junction']} | "
-            f"IDLE={idle_mw:.3f} MW "
+            f"IDLE_NOW={idle_mj:.3f} MJ "
             f"(STOPPED_RED={row['stopped_red_vehicles']}) | "
-            f"PED_PRED={prediction_mw:.3f} MW | "
-            f"CONGESTION={total_mw:.3f} MW | "
+            f"PED_PRED={prediction_mj:.3f} MJ | "
+            f"CONGESTION={total_mj:.3f} MJ | "
             f"WAIT(c0/c1/c2/c3)={waits} | "
             f"AFFECTED(EW_PED/NS_PED)={affected} | "
             f"UNRESOLVED={row['unresolved_pedestrians']}"
         )
 
     print(
-        f"NETWORK | IDLE={network_idle:.3f} MW | "
-        f"PED_PRED={network_prediction:.3f} MW | "
-        f"CONGESTION={network_idle + network_prediction:.3f} MW"
+        f"NETWORK | IDLE_NOW={network_idle:.3f} MJ | "
+        f"PED_PRED={network_prediction:.3f} MJ | "
+        f"CONGESTION={network_idle + network_prediction:.3f} MJ"
     )
 
 
@@ -389,7 +389,7 @@ def print_interval(time_s, rows):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="車両・歩行者の瞬間エネルギー負荷による混雑度v1"
+        description="車両・歩行者のエネルギー換算混雑度v1"
     )
     parser.add_argument(
         "--nogui",
@@ -474,7 +474,6 @@ def main():
                     (
                         clear_times,
                         predicted_energy,
-                        predicted_average_power,
                     ) = calculate_pedestrian_prediction(crossing_counts, affected)
                     row = make_output_row(
                         time_s,
@@ -485,7 +484,6 @@ def main():
                         affected,
                         clear_times,
                         predicted_energy,
-                        predicted_average_power,
                     )
                     rows.append(row)
                     writer.writerow(row)
