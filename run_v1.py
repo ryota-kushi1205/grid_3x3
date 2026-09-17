@@ -23,7 +23,7 @@ import traci
 SUMO_CFG = "grid_3x3.sumocfg"
 CSV_FILE = "congestion_v1.csv"
 
-SIMULATION_END = 3600.0
+SIMULATION_END = 5400.0
 SIMULATION_STEP = 1.0
 DECISION_INTERVAL = 5
 
