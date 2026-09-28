@@ -22,10 +22,13 @@ import traci
 
 SUMO_CFG = "grid_3x3.sumocfg"
 CSV_FILE = "congestion_v1.csv"
+SUMMARY_FILE = "congestion_v1_summary.csv"
 
 SIMULATION_END = 5400.0
 SIMULATION_STEP = 1.0
 DECISION_INTERVAL = 5
+WARMUP_END = 300.0
+DEMAND_END = 3600.0
 
 INTERSECTIONS = [
     "A0", "A1", "A2",
@@ -402,12 +405,39 @@ def parse_args():
         help=f"CSV出力先（既定: {CSV_FILE}）",
     )
     parser.add_argument(
+        "--summary",
+        default=SUMMARY_FILE,
+        help=f"区間別要約CSV出力先（既定: {SUMMARY_FILE}）",
+    )
+    parser.add_argument(
         "--end",
         type=float,
         default=SIMULATION_END,
         help=f"終了時刻（既定: {SIMULATION_END:.0f}秒）",
     )
+    parser.add_argument(
+        "--warmup",
+        type=float,
+        default=WARMUP_END,
+        help=f"評価対象外のwarm-up終了時刻（既定: {WARMUP_END:.0f}秒）",
+    )
+    parser.add_argument(
+        "--demand-end",
+        type=float,
+        default=DEMAND_END,
+        help=f"需要投入終了時刻（既定: {DEMAND_END:.0f}秒）",
+    )
     return parser.parse_args()
+
+
+def is_simulation_cleared(demand_end):
+    if traci.simulation.getTime() < demand_end:
+        return False
+    return (
+        traci.simulation.getMinExpectedNumber() == 0
+        and len(traci.vehicle.getIDList()) == 0
+        and len(traci.person.getIDList()) == 0
+    )
 
 
 def main():
@@ -424,6 +454,18 @@ def main():
         str(args.end),
     ])
 
+    totals = {
+        "main": {"decisions": 0, "idle": 0.0, "prediction": 0.0, "cost": 0.0},
+        "cooldown": {
+            "decisions": 0,
+            "idle": 0.0,
+            "prediction": 0.0,
+            "cost": 0.0,
+        },
+    }
+    cleared = False
+    final_time = 0.0
+
     try:
         with open(args.output, "w", newline="", encoding="utf-8-sig") as csv_file:
             writer = csv.DictWriter(csv_file, fieldnames=CSV_FIELDS)
@@ -432,16 +474,27 @@ def main():
             while traci.simulation.getTime() < args.end:
                 traci.simulationStep()
                 time_s = traci.simulation.getTime()
+                final_time = time_s
+
+                if is_simulation_cleared(args.demand_end):
+                    cleared = True
+                    print(f"全車両・歩行者の排出完了: T = {time_s:.0f} s")
+                    break
 
                 vehicles_by_junction = {
                     junction: get_detector_vehicle_ids_by_direction(junction)
                     for junction in INTERSECTIONS
                 }
 
-                if int(round(time_s)) % DECISION_INTERVAL != 0:
+                if (
+                    time_s <= args.warmup
+                    or int(round(time_s)) % DECISION_INTERVAL != 0
+                ):
                     continue
 
                 rows = []
+                interval_idle_mj = 0.0
+                interval_prediction_mj = 0.0
 
                 for junction in INTERSECTIONS:
                     w_counts = {
@@ -487,12 +540,90 @@ def main():
                     )
                     rows.append(row)
                     writer.writerow(row)
+                    interval_idle_mj += (
+                        len(stopped_red_vehicles)
+                        * IDLE_POWER
+                        * SIMULATION_STEP
+                        / 1_000_000.0
+                    )
+                    interval_prediction_mj += (
+                        sum(predicted_energy.values()) / 1_000_000.0
+                    )
 
                 csv_file.flush()
                 print_interval(time_s, rows)
 
+                period = "main" if time_s <= args.demand_end else "cooldown"
+                totals[period]["decisions"] += 1
+                totals[period]["idle"] += interval_idle_mj
+                totals[period]["prediction"] += interval_prediction_mj
+                totals[period]["cost"] += (
+                    interval_idle_mj + interval_prediction_mj
+                )
+
     finally:
+        remaining_vehicles = len(traci.vehicle.getIDList())
+        remaining_persons = len(traci.person.getIDList())
         traci.close()
+
+    main_totals = totals["main"]
+    cooldown_totals = totals["cooldown"]
+    summary_fields = [
+        "control",
+        "seed",
+        "warmup_end_s",
+        "demand_end_s",
+        "simulation_end_s",
+        "cleared",
+        "truncated",
+        "remaining_vehicles",
+        "remaining_persons",
+        "main_decisions",
+        "cooldown_decisions",
+        "total_decisions",
+        "main_idle_score_mj",
+        "main_prediction_score_mj",
+        "main_congestion_score_mj",
+        "cooldown_idle_score_mj",
+        "cooldown_prediction_score_mj",
+        "cooldown_congestion_score_mj",
+        "total_idle_score_mj",
+        "total_prediction_score_mj",
+        "total_congestion_score_mj",
+    ]
+    summary = {
+        "control": "fixed_time",
+        "seed": 42,
+        "warmup_end_s": f"{args.warmup:.0f}",
+        "demand_end_s": f"{args.demand_end:.0f}",
+        "simulation_end_s": f"{final_time:.0f}",
+        "cleared": cleared,
+        "truncated": not cleared and final_time >= args.end,
+        "remaining_vehicles": remaining_vehicles,
+        "remaining_persons": remaining_persons,
+        "main_decisions": main_totals["decisions"],
+        "cooldown_decisions": cooldown_totals["decisions"],
+        "total_decisions": main_totals["decisions"] + cooldown_totals["decisions"],
+        "main_idle_score_mj": f"{main_totals['idle']:.6f}",
+        "main_prediction_score_mj": f"{main_totals['prediction']:.6f}",
+        "main_congestion_score_mj": f"{main_totals['cost']:.6f}",
+        "cooldown_idle_score_mj": f"{cooldown_totals['idle']:.6f}",
+        "cooldown_prediction_score_mj": f"{cooldown_totals['prediction']:.6f}",
+        "cooldown_congestion_score_mj": f"{cooldown_totals['cost']:.6f}",
+        "total_idle_score_mj": (
+            f"{main_totals['idle'] + cooldown_totals['idle']:.6f}"
+        ),
+        "total_prediction_score_mj": (
+            f"{main_totals['prediction'] + cooldown_totals['prediction']:.6f}"
+        ),
+        "total_congestion_score_mj": (
+            f"{main_totals['cost'] + cooldown_totals['cost']:.6f}"
+        ),
+    }
+    with open(args.summary, "w", newline="", encoding="utf-8-sig") as summary_file:
+        writer = csv.DictWriter(summary_file, fieldnames=summary_fields)
+        writer.writeheader()
+        writer.writerow(summary)
 
 
 if __name__ == "__main__":
