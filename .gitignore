@@ -1,0 +1,13 @@
+# Python bytecode caches
+__pycache__/
+*.py[cod]
+
+# Generated SUMO measurement output
+congestion_v1.csv
+congestion_v1_summary.csv
+e2_output.xml
+
+# Generated MAPPO artifacts
+checkpoints/
+mappo_training*.csv
+mappo_evaluation*.csv
