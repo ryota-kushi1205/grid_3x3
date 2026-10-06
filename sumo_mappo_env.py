@@ -21,7 +21,7 @@ import run_v1 as metrics
 from signal_controller import SignalController
 
 
-ENVIRONMENT_VERSION = "warmup300-demand-aware-v1"
+ENVIRONMENT_VERSION = "warmup300-demand-aware-maxgreen60-v2"
 WARMUP_END = 300.0
 DEMAND_END = 3600.0
 MAX_SIMULATION_END = 5400.0
@@ -86,6 +86,7 @@ class SumoMAPPOEnv:
         warmup_end=WARMUP_END,
         demand_end=DEMAND_END,
         max_simulation_end=MAX_SIMULATION_END,
+        route_files=None,
     ):
         self.sumo_cfg = str(Path(sumo_cfg).resolve())
         self.use_gui = bool(use_gui)
@@ -93,6 +94,8 @@ class SumoMAPPOEnv:
         self.warmup_end = float(warmup_end)
         self.demand_end = float(demand_end)
         self.max_simulation_end = float(max_simulation_end)
+        self.route_files = None
+        self.set_route_files(route_files)
         self.agent_ids = tuple(metrics.INTERSECTIONS)
         self.num_agents = len(self.agent_ids)
         self.obs_dim = 31
@@ -107,9 +110,26 @@ class SumoMAPPOEnv:
         }
         self.last_metrics = {}
 
+    def set_route_files(self, route_files=None):
+        """Override the route files declared in the SUMO configuration.
+
+        Training scenarios contain exactly one vehicle and one pedestrian route
+        file.  Passing None restores the fixed benchmark routes in the config.
+        """
+        if route_files is None:
+            self.route_files = None
+            return
+        if len(route_files) != 2:
+            raise ValueError("route_files must contain vehicle and pedestrian files")
+        resolved = tuple(str(Path(path).resolve()) for path in route_files)
+        missing = [path for path in resolved if not Path(path).is_file()]
+        if missing:
+            raise FileNotFoundError(f"route file not found: {missing[0]}")
+        self.route_files = resolved
+
     def _sumo_command(self):
         binary = "sumo-gui" if self.use_gui else "sumo"
-        return [
+        command = [
             binary,
             "-c",
             self.sumo_cfg,
@@ -124,6 +144,9 @@ class SumoMAPPOEnv:
             "--duration-log.disable",
             "true",
         ]
+        if self.route_files is not None:
+            command.extend(["--route-files", ",".join(self.route_files)])
+        return command
 
     def reset(self, seed=None):
         self.close()
@@ -234,13 +257,15 @@ class SumoMAPPOEnv:
         features.append(min(data["unresolved"] / PEDESTRIAN_COUNT_SCALE, 1.0))
         waits = self.pedestrian_waits[junction]
         features.extend([
-            min(waits["east_west"] / 45.0, 1.0),
-            min(waits["north_south"] / 45.0, 1.0),
+            min(waits["east_west"] / self.controller.max_green, 1.0),
+            min(waits["north_south"] / self.controller.max_green, 1.0),
         ])
 
         phase = self.controller.phase(junction)
         features.extend([1.0 if phase == index else 0.0 for index in range(6)])
-        features.append(min(self.controller.stable_elapsed[junction] / 45.0, 1.0))
+        features.append(
+            min(self.controller.stable_elapsed[junction] / self.controller.max_green, 1.0)
+        )
         previous_action = self.controller.previous_action[junction]
         features.extend([1.0 if previous_action == action else 0.0 for action in range(2)])
         row = ord(junction[0]) - ord("A")

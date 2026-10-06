@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 STABLE_PHASES = (0, 3)
 TRANSITION_PHASES = (1, 2, 4, 5)
+DEFAULT_MAX_GREEN = 60.0
 
 
 @dataclass
@@ -29,7 +30,7 @@ class SignalController:
         junction_ids,
         decision_interval=5.0,
         min_green=15.0,
-        max_green=45.0,
+        max_green=DEFAULT_MAX_GREEN,
     ):
         self.traci = traci_connection
         self.junction_ids = tuple(junction_ids)

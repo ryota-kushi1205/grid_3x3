@@ -53,7 +53,7 @@ class SignalControllerTest(unittest.TestCase):
         self.assertEqual(self.traci.trafficlight.getPhase("A0"), 1)
 
     def test_maximum_green_forces_switch_with_opposing_demand(self):
-        self.controller.stable_elapsed["A0"] = 45.0
+        self.controller.stable_elapsed["A0"] = 60.0
         result = self.controller.apply_action(
             "A0",
             0,
@@ -63,7 +63,7 @@ class SignalControllerTest(unittest.TestCase):
         self.assertEqual(result.executed_action, 1)
 
     def test_maximum_green_does_not_force_without_opposing_demand(self):
-        self.controller.stable_elapsed["A0"] = 45.0
+        self.controller.stable_elapsed["A0"] = 65.0
         result = self.controller.apply_action(
             "A0",
             0,
@@ -71,6 +71,19 @@ class SignalControllerTest(unittest.TestCase):
         )
         self.assertFalse(result.forced)
         self.assertEqual(result.executed_action, 0)
+
+    def test_hold_is_allowed_between_old_and_new_maximum_green(self):
+        for elapsed in (45.0, 55.0, 59.0):
+            with self.subTest(elapsed=elapsed):
+                self.controller.stable_elapsed["A0"] = elapsed
+                self.assertEqual(
+                    self.controller.action_mask("A0", {0: True, 3: True}),
+                    (True, True),
+                )
+                result = self.controller.apply_action("A0", 0, {0: True, 3: True})
+                self.assertFalse(result.forced)
+                self.assertEqual(result.executed_action, 0)
+                self.assertEqual(self.traci.trafficlight.getPhase("A0"), 0)
 
     def test_transition_masks_switch(self):
         self.traci.trafficlight.phases["A0"] = 2

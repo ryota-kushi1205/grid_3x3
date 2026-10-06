@@ -11,3 +11,6 @@ e2_output.xml
 checkpoints/
 mappo_training*.csv
 mappo_evaluation*.csv
+
+# Reproducible, generated training-demand scenarios
+training_scenarios/

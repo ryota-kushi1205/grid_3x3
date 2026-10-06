@@ -1,4 +1,4 @@
-"""Evaluate a trained MAPPO checkpoint on the fixed 3x3 SUMO demand."""
+"""Evaluate a trained MAPPO checkpoint on fixed or held-out SUMO demand."""
 
 import argparse
 import csv
@@ -46,6 +46,10 @@ SUMMARY_FIELDS = [
     "checkpoint",
     "checkpoint_total_steps",
     "checkpoint_episode",
+    "scenario_id",
+    "scenario_split",
+    "scenario_profile",
+    "scenario_demand_level",
     "seed",
     "warmup_end_s",
     "demand_end_s",
@@ -80,11 +84,23 @@ def parse_args():
     )
     parser.add_argument(
         "--checkpoint",
-        default="checkpoints/mappo_warmup300_latest.pt",
+        default="checkpoints/mappo_warmup300_maxgreen60_latest.pt",
     )
     parser.add_argument("--output", default="mappo_evaluation.csv")
     parser.add_argument("--summary", default="mappo_evaluation_summary.csv")
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--scenario-manifest",
+        help="Manifest containing a held-out validation scenario.",
+    )
+    parser.add_argument(
+        "--scenario-id",
+        help="Validation scenario_id to evaluate; requires --scenario-manifest.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        help="SUMO seed; defaults to 42 for fixed demand or the validation seed.",
+    )
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--gui", action="store_true")
     parser.add_argument(
@@ -96,6 +112,44 @@ def parse_args():
     parser.add_argument("--demand-end", type=float, default=DEMAND_END)
     parser.add_argument("--max-end", type=float, default=MAX_SIMULATION_END)
     return parser.parse_args()
+
+
+def load_validation_scenario(manifest_value, scenario_id):
+    if bool(manifest_value) != bool(scenario_id):
+        raise ValueError(
+            "--scenario-manifest and --scenario-id must be provided together"
+        )
+    if not manifest_value:
+        return None
+
+    manifest_path = Path(manifest_value).resolve()
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"scenario manifest not found: {manifest_path}")
+    with manifest_path.open(newline="", encoding="utf-8") as manifest_file:
+        reader = csv.DictReader(manifest_file)
+        for row in reader:
+            if row.get("scenario_id") != scenario_id:
+                continue
+            if row.get("split") != "validation":
+                raise ValueError(
+                    f"scenario {scenario_id!r} has split={row.get('split')!r}; "
+                    "only held-out validation scenarios are accepted"
+                )
+            vehicle_route = (
+                manifest_path.parent / row["vehicle_route_file"]
+            ).resolve()
+            pedestrian_route = (
+                manifest_path.parent / row["pedestrian_route_file"]
+            ).resolve()
+            if not vehicle_route.is_file() or not pedestrian_route.is_file():
+                raise FileNotFoundError(
+                    f"scenario {scenario_id!r} references a missing route file"
+                )
+            row["vehicle_route"] = vehicle_route
+            row["pedestrian_route"] = pedestrian_route
+            row["seed"] = int(row["seed"])
+            return row
+    raise ValueError(f"validation scenario not found: {scenario_id}")
 
 
 def empty_totals():
@@ -111,16 +165,25 @@ def update_totals(totals, info):
 
 def main():
     args = parse_args()
+    scenario = load_validation_scenario(args.scenario_manifest, args.scenario_id)
+    evaluation_seed = (
+        args.seed if args.seed is not None else scenario["seed"] if scenario else 42
+    )
     checkpoint_path = Path(args.checkpoint)
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"checkpoint not found: {checkpoint_path}")
 
     env = SumoMAPPOEnv(
         use_gui=args.gui,
-        seed=args.seed,
+        seed=evaluation_seed,
         warmup_end=args.warmup,
         demand_end=args.demand_end,
         max_simulation_end=args.max_end,
+        route_files=(
+            [scenario["vehicle_route"], scenario["pedestrian_route"]]
+            if scenario
+            else None
+        ),
     )
     trainer = MAPPOTrainer(
         env.obs_dim,
@@ -134,7 +197,7 @@ def main():
         raise ValueError(
             "checkpoint was trained with an incompatible environment: "
             f"expected {ENVIRONMENT_VERSION!r}, got {checkpoint_version!r}. "
-            "Retrain MAPPO after the warm-up and observation changes."
+            "Retrain MAPPO after environment, signal-limit, or observation changes."
         )
     expected_settings = {
         "warmup_end": args.warmup,
@@ -164,7 +227,7 @@ def main():
     final_info = None
 
     try:
-        observations, state, masks = env.reset(seed=args.seed)
+        observations, state, masks = env.reset(seed=evaluation_seed)
         with detail_path.open("w", newline="", encoding="utf-8-sig") as detail_file:
             writer = csv.DictWriter(detail_file, fieldnames=DETAIL_FIELDS)
             writer.writeheader()
@@ -262,7 +325,13 @@ def main():
         "checkpoint": str(checkpoint_path.resolve()),
         "checkpoint_total_steps": checkpoint_extra.get("total_steps", ""),
         "checkpoint_episode": checkpoint_extra.get("episode", ""),
-        "seed": args.seed,
+        "scenario_id": scenario["scenario_id"] if scenario else "fixed",
+        "scenario_split": scenario["split"] if scenario else "benchmark",
+        "scenario_profile": scenario["profile"] if scenario else "fixed",
+        "scenario_demand_level": (
+            scenario["demand_level"] if scenario else "fixed"
+        ),
+        "seed": evaluation_seed,
         "warmup_end_s": f"{args.warmup:.0f}",
         "demand_end_s": f"{args.demand_end:.0f}",
         "simulation_end_s": f"{final_info['time_s']:.0f}",
